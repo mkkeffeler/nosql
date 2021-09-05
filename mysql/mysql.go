@@ -62,11 +62,11 @@ func insertUpdateX509CertificateQry(bucket []byte) string {
 	return fmt.Sprintf("INSERT INTO `%s`(nkey, nvalue, subjectNotBefore, subjectNotAfter, subjectState, subjectLocality, subjectCountry, subjectOrganization,subjectOrganizationalUnit, subjectCommonName, issuerDistinguishedName) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE nvalue = ?", bucket)
 }
 
-func insertUpdateX509SansCertificateQry(bucket []byte) string {
+func insertX509SansCertificateQry(bucket []byte) string {
 	return fmt.Sprintf("INSERT INTO `%s`(nkey, sanText, sanType) VALUES(?,?,?);", bucket)
 }
 
-func insertUpdateX509ExtensionsCertificateQry(bucket []byte) string {
+func insertX509ExtensionsCertificateQry(bucket []byte) string {
 	return fmt.Sprintf("INSERT INTO `%s`(nkey, extensionOID) VALUES(?,?)", bucket)
 }
 
@@ -128,13 +128,13 @@ func (db *DB) SetX509Certificate(bucket, key, value []byte, notBefore time.Time,
 		return errors.Wrapf(err, "failed to set %s/%s", bucket, key)
 	}
 	for _, extension := range extensions {
-		_, err := db.db.Exec(insertUpdateX509ExtensionsCertificateQry(extensionBucket), key, extension["value"], extension["type"])
+		_, err := db.db.Exec(insertX509ExtensionsCertificateQry(extensionBucket), key, extension["value"])
 		if err != nil {
 			return errors.Wrapf(err, "failed to set %s/%s", extensionBucket, key)
 		}
 	}
 	for _, san := range sans {
-		_, err := db.db.Exec(insertUpdateX509SansCertificateQry(dnsNameBucket), key, san["value"], san["type"])
+		_, err := db.db.Exec(insertX509SansCertificateQry(dnsNameBucket), key, san["value"], san["type"])
 		if err != nil {
 			return errors.Wrapf(err, "failed to set %s/%s", dnsNameBucket, key)
 		}
