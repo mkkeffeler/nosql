@@ -97,7 +97,7 @@ type DB interface {
 	// Set sets the given value in the given table/bucket and key.
 	Set(bucket, key, value []byte) error
 	// SetX509Certificate sets the given value in the x509 certificate table/bucket and key.
-	SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string) error
+	SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string, extensions []map[interface{}]interface{}, sans []map[interface{}]interface{}, extensionBucket []byte, dnsNameBucket []byte) error
 	// CmpAndSwap swaps the value at the given bucket and key if the current
 	// value is equivalent to the oldValue input. Returns 'true' if the
 	// swap was successful and 'false' otherwise.
@@ -112,6 +112,10 @@ type DB interface {
 	CreateTable(bucket []byte) error
 	// CreateX509CertificateTable creates a x509cert table or a bucket in the database.
 	CreateX509CertificateTable(bucket []byte) error
+	// CreateX509CertificateSansTable creates a x509cert table to associate SANS with their certs. This is how we search by SAN.
+	CreateX509CertificateSansTable(bucket []byte) error
+	// CreateX509CertificateExtensionsTable creates a x509cert table to associate Extensions with their certs. This is how we search by Extension.
+	CreateX509CertificateExtensionsTable(bucket []byte) error
 	// DeleteTable deletes a table or a bucket in the database.
 	DeleteTable(bucket []byte) error
 }
@@ -129,9 +133,6 @@ const (
 	// CreateTable on a TxEntry will represent the creation of a table or
 	// bucket on the database.
 	CreateTable TxCmd = iota
-	// CreateX509CertificateTable on a TxEntry will represent the creation of a table or
-	// bucket on the database.
-	CreateX509CertificateTable TxCmd = iota
 	// DeleteTable on a TxEntry will represent the deletion of a table or
 	// bucket on the database.
 	DeleteTable
@@ -161,8 +162,6 @@ func (o TxCmd) String() string {
 	switch o {
 	case CreateTable:
 		return "create-table"
-	case CreateX509CertificateTable:
-		return "create-x509cert-table"
 	case DeleteTable:
 		return "delete-table"
 	case Get:
@@ -186,14 +185,6 @@ func (o TxCmd) String() string {
 // represents a read or write operation on the database.
 type Tx struct {
 	Operations []*TxEntry
-}
-
-// CreateX509CertificateTable adds a new create query to the transaction.
-func (tx *Tx) CreateX509CertificateTable(bucket []byte) {
-	tx.Operations = append(tx.Operations, &TxEntry{
-		Bucket: bucket,
-		Cmd:    CreateX509CertificateTable,
-	})
 }
 
 // CreateTable adds a new create query to the transaction.
@@ -222,7 +213,7 @@ func (tx *Tx) Get(bucket, key []byte) {
 }
 
 // SetX509Certificate adds a new write query to the transaction.
-func (tx *Tx) SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string) {
+func (tx *Tx) SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string, extensions []map[interface{}]interface{}, sans []map[interface{}]interface{}, extensionBucket []byte, dnsNameBucket []byte) {
 	tx.Operations = append(tx.Operations, &TxEntry{
 		Bucket: bucket,
 		Key:    key,

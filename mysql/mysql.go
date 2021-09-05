@@ -62,6 +62,14 @@ func insertUpdateX509CertificateQry(bucket []byte) string {
 	return fmt.Sprintf("INSERT INTO `%s`(nkey, nvalue, subjectNotBefore, subjectNotAfter, subjectState, subjectLocality, subjectCountry, subjectOrganization,subjectOrganizationalUnit, subjectCommonName, issuerDistinguishedName) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE nvalue = ?", bucket)
 }
 
+func insertUpdateX509SansCertificateQry(bucket []byte) string {
+	return fmt.Sprintf("INSERT INTO `%s`(nkey, sanText, sanType) VALUES(?,?,?);", bucket)
+}
+
+func insertUpdateX509ExtensionsCertificateQry(bucket []byte) string {
+	return fmt.Sprintf("INSERT INTO `%s`(nkey, extensionOID) VALUES(?,?)", bucket)
+}
+
 func delQry(bucket []byte) string {
 	return fmt.Sprintf("DELETE FROM `%s` WHERE nkey = ?", bucket)
 }
@@ -72,6 +80,14 @@ func createTableQry(bucket []byte) string {
 
 func createX509CertsTableQry(bucket []byte) string {
 	return fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`(nkey VARBINARY(255), nvalue BLOB, subjectNotBefore TIMESTAMP(0), subjectNotAfter TIMESTAMP(0), subjectState VARCHAR(255), subjectLocality VARCHAR(255), subjectCountry VARCHAR(255), subjectOrganization VARCHAR(255), subjectOrganizationalUnit VARCHAR(255),  subjectCommonName VARCHAR(255), issuerDistinguishedName VARCHAR(255), PRIMARY KEY (nkey));", bucket)
+}
+
+func createX509CertsSANSTableQry(bucket []byte) string {
+	return fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`(id MEDIUMINT NOT NULL AUTO_INCREMENT, nkey VARBINARY(255), sanText VARCHAR(255), sanType VARCHAR(255), PRIMARY KEY (id), CONSTRAINT CertSAN FOREIGN KEY (nkey) REFERENCES x509_certs(nkey));", bucket)
+}
+
+func createX509CertsExtensionsTableQry(bucket []byte) string {
+	return fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`(id MEDIUMINT NOT NULL AUTO_INCREMENT, nkey VARBINARY(255), extensionOID VARCHAR(255), PRIMARY KEY (id), CONSTRAINT CertExtension FOREIGN KEY (nkey) REFERENCES x509_certs(nkey));", bucket)
 }
 
 func alterX509CertsTableQry(bucket []byte) string {
@@ -106,11 +122,24 @@ func (db *DB) Set(bucket, key, value []byte) error {
 }
 
 // Set inserts the key and value into the given bucket(column).
-func (db *DB) SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string) error {
+func (db *DB) SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string, extensions []map[interface{}]interface{}, sans []map[interface{}]interface{}, extensionBucket []byte, dnsNameBucket []byte) error {
 	_, err := db.db.Exec(insertUpdateX509CertificateQry(bucket), key, value, notBefore, notAfter, strings.Join(province, " "), strings.Join(locality, " "), strings.Join(country, " "), strings.Join(organization, " "), strings.Join(organizationalUnit, " "), commonName, issuer, value)
 	if err != nil {
 		return errors.Wrapf(err, "failed to set %s/%s", bucket, key)
 	}
+	for _, extension := range extensions {
+		_, err := db.db.Exec(insertUpdateX509ExtensionsCertificateQry(extensionBucket), key, extension["value"], extension["type"])
+		if err != nil {
+			return errors.Wrapf(err, "failed to set %s/%s", extensionBucket, key)
+		}
+	}
+	for _, san := range sans {
+		_, err := db.db.Exec(insertUpdateX509SansCertificateQry(dnsNameBucket), key, san["value"], san["type"])
+		if err != nil {
+			return errors.Wrapf(err, "failed to set %s/%s", dnsNameBucket, key)
+		}
+	}
+
 	return nil
 }
 
@@ -299,7 +328,7 @@ func (db *DB) CreateX509CertificateTable(bucket []byte) error {
 				return errors.Wrapf(err, "failed to create table %s", bucket)
 
 			}
-		} else { //Some other error occured.
+		} else { //Some other error occurred.
 			return errors.Wrapf(colErr, "failed to get length of columns %s", bucket)
 		}
 
@@ -316,6 +345,26 @@ func (db *DB) CreateX509CertificateTable(bucket []byte) error {
 				return errors.Wrapf(colErr, "failed to alter table to new schema %s", bucket)
 			}
 		}
+	}
+	return nil
+}
+
+// CreateX509CertificateSansTable creates a table to store the sans for certificates in a table so we can establish the one to many relationship of a certificate to SANS. This is needed so we can search by Sans as well.
+func (db *DB) CreateX509CertificateSansTable(bucket []byte) error {
+	_, err := db.db.Exec(createX509CertsSANSTableQry(bucket))
+	if err != nil {
+		return errors.Wrapf(err, "failed to create table %s", bucket)
+
+	}
+	return nil
+}
+
+// CreateX509CertificateExtensionsTable creates a table to store the sans for certificates in a table so we can establish the one to many relationship of a certificate to it's extensions. This is needed so we can search by Extensions as well.
+func (db *DB) CreateX509CertificateExtensionsTable(bucket []byte) error {
+	_, err := db.db.Exec(createX509CertsExtensionsTableQry(bucket))
+	if err != nil {
+		return errors.Wrapf(err, "failed to create table %s", bucket)
+
 	}
 	return nil
 }

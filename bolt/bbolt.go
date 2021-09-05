@@ -54,6 +54,20 @@ func (db *DB) CreateX509CertificateTable(bucket []byte) error {
 	})
 }
 
+// CreateX509CertificateSansTable creates a bucket or an embedded bucket if it does not exists.
+func (db *DB) CreateX509CertificateSansTable(bucket []byte) error {
+	return db.db.Update(func(tx *bolt.Tx) error {
+		return db.createBucket(tx, bucket)
+	})
+}
+
+// CreateX509CertificateExtensionsTable creates a bucket or an embedded bucket if it does not exists.
+func (db *DB) CreateX509CertificateExtensionsTable(bucket []byte) error {
+	return db.db.Update(func(tx *bolt.Tx) error {
+		return db.createBucket(tx, bucket)
+	})
+}
+
 // DeleteTable deletes a root or embedded bucket. Returns an error if the
 // bucket cannot be found or if the key represents a non-bucket value.
 func (db *DB) DeleteTable(bucket []byte) error {
@@ -93,7 +107,7 @@ func (db *DB) Set(bucket, key, value []byte) error {
 }
 
 // Set stores the given value on bucket and key.
-func (db *DB) SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string) error {
+func (db *DB) SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string, extensions []map[interface{}]interface{}, sans []map[interface{}]interface{}, extensionBucket []byte, dnsNameBucket []byte) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		b, err := db.getBucket(tx, bucket)
 		if err != nil {

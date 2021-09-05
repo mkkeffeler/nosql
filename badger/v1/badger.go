@@ -80,6 +80,30 @@ func (db *DB) CreateX509CertificateTable(bucket []byte) error {
 	})
 }
 
+// CreateX509CertificateExtensionsTable creates a token element with the 'bucket' prefix so that such
+// that their appears to be a table.
+func (db *DB) CreateX509CertificateExtensionsTable(bucket []byte) error {
+	bk, err := badgerEncode(bucket)
+	if err != nil {
+		return err
+	}
+	return db.db.Update(func(txn *badger.Txn) error {
+		return errors.Wrapf(txn.Set(bk, []byte{}), "failed to create %s/", bucket)
+	})
+}
+
+// CreateX509CertificateSansTable creates a token element with the 'bucket' prefix so that such
+// that their appears to be a table.
+func (db *DB) CreateX509CertificateSansTable(bucket []byte) error {
+	bk, err := badgerEncode(bucket)
+	if err != nil {
+		return err
+	}
+	return db.db.Update(func(txn *badger.Txn) error {
+		return errors.Wrapf(txn.Set(bk, []byte{}), "failed to create %s/", bucket)
+	})
+}
+
 // DeleteTable deletes a root or embedded bucket. Returns an error if the
 // bucket cannot be found or if the key represents a non-bucket value.
 func (db *DB) DeleteTable(bucket []byte) error {
@@ -180,7 +204,7 @@ func (db *DB) Set(bucket, key, value []byte) error {
 }
 
 // Set stores the given value on bucket and key.
-func (db *DB) SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string) error {
+func (db *DB) SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string, extensions []map[interface{}]interface{}, sans []map[interface{}]interface{}, extensionBucket []byte, dnsNameBucket []byte) error {
 	bk, err := toBadgerKey(bucket, key)
 	if err != nil {
 		return errors.Wrapf(err, "error converting %s/%s to badgerKey", bucket, key)
