@@ -225,7 +225,7 @@ func (db *DB) List(bucket []byte) ([]*database.Entry, error) {
 
 // ListPage returns a page worth of entries, whatever page size is specified. Better for performance on large DBs.
 func (db *DB) ListPage(bucket []byte, limit int, offset int) ([]*database.Entry, error) {
-	rows, err := db.db.Query(fmt.Sprintf("SELECT * FROM `%s` LIMIT %b, %b", bucket, limit, offset))
+	rows, err := db.db.Query(fmt.Sprintf("SELECT * FROM `%s` LIMIT %b OFFSET %b", bucket, limit, offset))
 	if err != nil {
 		return nil, errors.Wrap(err, "error Getting a page of results")
 	}
