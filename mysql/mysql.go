@@ -58,8 +58,20 @@ func insertUpdateQry(bucket []byte) string {
 	return fmt.Sprintf("INSERT INTO `%s`(nkey, nvalue) VALUES(?,?) ON DUPLICATE KEY UPDATE nvalue = ?", bucket)
 }
 
+// Count returns a number of entries in some table
+func (db *DB) Count(bucket []byte) (int, error) {
+	var count int
+	err := db.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", bucket)).Scan(&count)
+
+	if err != nil {
+		return 0, errors.Wrapf(err, "Error getting count from '%s'", bucket)
+	}
+
+	return count, nil
+}
+
 func insertUpdateX509CertificateQry(bucket []byte) string {
-	return fmt.Sprintf("INSERT INTO `%s`(nkey, nvalue, subjectNotBefore, subjectNotAfter, subjectState, subjectLocality, subjectCountry, subjectOrganization,subjectOrganizationalUnit, subjectCommonName, issuerDistinguishedName) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE nvalue = ?", bucket)
+	return fmt.Sprintf("INSERT INTO `%s`(nkey, nvalue, subjectNotBefore, subjectNotAfter, subjectState, subjectLocality, subjectCountry, subjectOrganization,subjectOrganizationalUnit, subjectCommonName, issuerDistinguishedName) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE nvalue = ?, subjectNotBefore = ?, subjectNotAfter = ?, subjectState = ?, subjectLocality = ?, subjectCountry = ?, subjectOrganization = ?,subjectOrganizationalUnit = ?, subjectCommonName = ?, issuerDistinguishedName = ?", bucket)
 }
 
 func insertX509SansCertificateQry(bucket []byte) string {
@@ -123,7 +135,7 @@ func (db *DB) Set(bucket, key, value []byte) error {
 
 // Set inserts the key and value into the given bucket(column).
 func (db *DB) SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string, extensions []map[interface{}]interface{}, sans []map[interface{}]interface{}, extensionBucket []byte, dnsNameBucket []byte) error {
-	_, err := db.db.Exec(insertUpdateX509CertificateQry(bucket), key, value, notBefore, notAfter, strings.Join(province, " "), strings.Join(locality, " "), strings.Join(country, " "), strings.Join(organization, " "), strings.Join(organizationalUnit, " "), commonName, issuer, value)
+	_, err := db.db.Exec(insertUpdateX509CertificateQry(bucket), key, value, notBefore, notAfter, strings.Join(province, " "), strings.Join(locality, " "), strings.Join(country, " "), strings.Join(organization, " "), strings.Join(organizationalUnit, " "), commonName, issuer, value, notBefore, notAfter, strings.Join(province, " "), strings.Join(locality, " "), strings.Join(country, " "), strings.Join(organization, " "), strings.Join(organizationalUnit, " "), commonName, issuer)
 	if err != nil {
 		return errors.Wrapf(err, "failed to set %s/%s", bucket, key)
 	}
@@ -160,18 +172,37 @@ func (db *DB) rowsToList(rows *sql.Rows, err error, bucket []byte) ([]*database.
 	}
 	defer rows.Close()
 	var (
-		key, value string
-		entries    []*database.Entry
+		key, value                string
+		subjectNotBefore          sql.NullString
+		subjectNotAfter           sql.NullString
+		subjectState              sql.NullString
+		subjectLocality           sql.NullString
+		subjectCountry            sql.NullString
+		subjectOrganization       sql.NullString
+		subjectOrganizationalUnit sql.NullString
+		subjectCommonName         sql.NullString
+		issuerDistinguishedName   sql.NullString
+		entries                   []*database.Entry
 	)
 	for rows.Next() {
-		err := rows.Scan(&key, &value)
+		err := rows.Scan(&key, &value, &subjectNotBefore, &subjectNotAfter, &subjectState, &subjectLocality, &subjectCountry, &subjectOrganization, &subjectOrganizationalUnit, &subjectCommonName, &issuerDistinguishedName)
 		if err != nil {
 			return nil, errors.Wrap(err, "error getting key and value from row")
+
 		}
 		entries = append(entries, &database.Entry{
-			Bucket: bucket,
-			Key:    []byte(key),
-			Value:  []byte(value),
+			Bucket:                    bucket,
+			Key:                       []byte(key),
+			Value:                     []byte(value),
+			SubjectNotBefore:          subjectNotBefore,
+			SubjectNotAfter:           subjectNotAfter,
+			SubjectState:              subjectState,
+			SubjectLocality:           subjectLocality,
+			SubjectCountry:            subjectCountry,
+			SubjectOrganization:       subjectOrganization,
+			SubjectOrganizationalUnit: subjectOrganizationalUnit,
+			SubjectCommonName:         subjectCommonName,
+			IssuerDistinguishedName:   issuerDistinguishedName,
 		})
 	}
 	err = rows.Err()
@@ -184,6 +215,20 @@ func (db *DB) rowsToList(rows *sql.Rows, err error, bucket []byte) ([]*database.
 // List returns the full list of entries in a column.
 func (db *DB) List(bucket []byte) ([]*database.Entry, error) {
 	rows, err := db.db.Query(fmt.Sprintf("SELECT * FROM `%s`", bucket))
+	entries, rowsErr := db.rowsToList(rows, err, bucket)
+	if rowsErr != nil {
+		return nil, errors.Wrap(rowsErr, "error converting row to list")
+	}
+
+	return entries, nil
+}
+
+// ListPage returns a page worth of entries, whatever page size is specified. Better for performance on large DBs.
+func (db *DB) ListPage(bucket []byte, limit int, offset int) ([]*database.Entry, error) {
+	rows, err := db.db.Query(fmt.Sprintf("SELECT * FROM `%s` LIMIT %b, %b", bucket, limit, offset))
+	if err != nil {
+		return nil, errors.Wrap(err, "error Getting a page of results")
+	}
 	entries, rowsErr := db.rowsToList(rows, err, bucket)
 	if rowsErr != nil {
 		return nil, errors.Wrap(rowsErr, "error converting row to list")

@@ -1,6 +1,7 @@
 package database
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
@@ -104,8 +105,12 @@ type DB interface {
 	CmpAndSwap(bucket, key, oldValue, newValue []byte) ([]byte, bool, error)
 	// Del deletes the data in the given table/bucket and key.
 	Del(bucket, key []byte) error
+	// Count returns a number of entries in some table
+	Count(bucket []byte) (int, error)
 	// List returns a list of all the entries in a given table/bucket.
 	List(bucket []byte) ([]*Entry, error)
+	// ListPage returns a page worth of entries, whatever page size is specified. Better for performance on large DBs.
+	ListPage(bucket []byte, limit int, offset int) ([]*Entry, error)
 	// Update performs a transaction with multiple read-write commands.
 	Update(tx *Tx) error
 	// CreateTable creates a table or a bucket in the database.
@@ -275,7 +280,16 @@ type TxEntry struct {
 
 // Entry is the return value for list commands.
 type Entry struct {
-	Bucket []byte
-	Key    []byte
-	Value  []byte
+	Bucket                    []byte
+	Key                       []byte
+	Value                     []byte
+	SubjectNotBefore          sql.NullString
+	SubjectNotAfter           sql.NullString
+	SubjectState              sql.NullString
+	SubjectLocality           sql.NullString
+	SubjectCountry            sql.NullString
+	SubjectOrganization       sql.NullString
+	SubjectOrganizationalUnit sql.NullString
+	SubjectCommonName         sql.NullString
+	IssuerDistinguishedName   sql.NullString
 }

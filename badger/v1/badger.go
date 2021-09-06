@@ -203,6 +203,16 @@ func (db *DB) Set(bucket, key, value []byte) error {
 	})
 }
 
+// Count returns a number of entries in some table
+func (db *DB) Count(bucket []byte) (int, error) {
+	entries, err := db.List(bucket)
+	if err != nil {
+		return 0, errors.Wrap(err, "Count Failed")
+	}
+
+	return len(entries), nil
+}
+
 // Set stores the given value on bucket and key.
 func (db *DB) SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string, extensions []map[interface{}]interface{}, sans []map[interface{}]interface{}, extensionBucket []byte, dnsNameBucket []byte) error {
 	bk, err := toBadgerKey(bucket, key)
@@ -223,6 +233,52 @@ func (db *DB) Del(bucket, key []byte) error {
 	return db.db.Update(func(txn *badger.Txn) error {
 		return errors.Wrapf(txn.Delete(bk), "failed to delete %s/%s", bucket, key)
 	})
+}
+
+// ListPage returns a page worth of entries, whatever page size is specified. Better for performance on large DBs.
+func (db *DB) ListPage(bucket []byte, limit int, offset int) ([]*database.Entry, error) {
+	var (
+		entries     []*database.Entry
+		tableExists bool
+	)
+	err := db.db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		prefix, err := badgerEncode(bucket)
+		if err != nil {
+			return err
+		}
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			tableExists = true
+			item := it.Item()
+			bk := item.KeyCopy(nil)
+			if isBadgerTable(bk) {
+				continue
+			}
+			_bucket, key, err := fromBadgerKey(bk)
+			if err != nil {
+				return errors.Wrapf(err, "error converting from badgerKey %s", bk)
+			}
+			if !bytes.Equal(_bucket, bucket) {
+				return errors.Errorf("bucket names do not match; want %v, but got %v",
+					bucket, _bucket)
+			}
+			v, err := item.ValueCopy(nil)
+			if err != nil {
+				return errors.Wrap(err, "error retrieving contents from database value")
+			}
+			entries = append(entries, &database.Entry{
+				Bucket: _bucket,
+				Key:    key,
+				Value:  v,
+			})
+		}
+		if !tableExists {
+			return errors.Wrapf(database.ErrNotFound, "bucket %s not found", bucket)
+		}
+		return nil
+	})
+	return entries, err
 }
 
 // List returns the full list of entries in a bucket.

@@ -128,6 +128,38 @@ func (db *DB) Del(bucket, key []byte) error {
 	})
 }
 
+// Count returns a number of entries in some table
+func (db *DB) Count(bucket []byte) (int, error) {
+	entries, err := db.List(bucket)
+	if err != nil {
+		return 0, errors.Wrap(err, "Count Failed")
+	}
+
+	return len(entries), nil
+}
+
+// ListPage returns a page worth of entries, whatever page size is specified. Better for performance on large DBs.
+func (db *DB) ListPage(bucket []byte, limit int, offset int) ([]*database.Entry, error) {
+	var entries []*database.Entry
+	err := db.db.View(func(tx *bolt.Tx) error {
+		b, err := db.getBucket(tx, bucket)
+		if err != nil {
+			return errors.Wrap(err, "getBucket failed")
+		}
+
+		c := b.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			entries = append(entries, &database.Entry{
+				Bucket: bucket,
+				Key:    cloneBytes(k),
+				Value:  cloneBytes(v),
+			})
+		}
+		return nil
+	})
+	return entries, err
+}
+
 // List returns the full list of entries in a bucket.
 func (db *DB) List(bucket []byte) ([]*database.Entry, error) {
 	var entries []*database.Entry

@@ -269,6 +269,62 @@ func (db *DB) List(bucket []byte) ([]*database.Entry, error) {
 	return entries, err
 }
 
+// Count returns a number of entries in some table
+func (db *DB) Count(bucket []byte) (int, error) {
+	entries, err := db.List(bucket)
+	if err != nil {
+		return 0, errors.Wrap(err, "Count Failed")
+	}
+
+	return len(entries), nil
+}
+
+// ListPage returns a page worth of entries, whatever page size is specified. Better for performance on large DBs.
+func (db *DB) ListPage(bucket []byte, limit int, offset int) ([]*database.Entry, error) {
+	var (
+		entries     []*database.Entry
+		tableExists bool
+	)
+	err := db.db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		prefix, err := badgerEncode(bucket)
+		if err != nil {
+			return err
+		}
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			tableExists = true
+			item := it.Item()
+			bk := item.KeyCopy(nil)
+			if isBadgerTable(bk) {
+				continue
+			}
+			_bucket, key, err := fromBadgerKey(bk)
+			if err != nil {
+				return errors.Wrapf(err, "error converting from badgerKey %s", bk)
+			}
+			if !bytes.Equal(_bucket, bucket) {
+				return errors.Errorf("bucket names do not match; want %v, but got %v",
+					bucket, _bucket)
+			}
+			v, err := item.ValueCopy(nil)
+			if err != nil {
+				return errors.Wrap(err, "error retrieving contents from database value")
+			}
+			entries = append(entries, &database.Entry{
+				Bucket: _bucket,
+				Key:    key,
+				Value:  cloneBytes(v),
+			})
+		}
+		if !tableExists {
+			return errors.Wrapf(database.ErrNotFound, "bucket %s not found", bucket)
+		}
+		return nil
+	})
+	return entries, err
+}
+
 // CmpAndSwap modifies the value at the given bucket and key (to newValue)
 // only if the existing (current) value matches oldValue.
 func (db *DB) CmpAndSwap(bucket, key, oldValue, newValue []byte) ([]byte, bool, error) {
