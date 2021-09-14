@@ -107,7 +107,7 @@ func (db *DB) Set(bucket, key, value []byte) error {
 }
 
 // Set stores the given value on bucket and key.
-func (db *DB) SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string, extensions []map[interface{}]interface{}, sans []map[interface{}]interface{}, extensionBucket []byte, dnsNameBucket []byte) error {
+func (db *DB) SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string, extensions []map[interface{}]interface{}, sans []map[interface{}]interface{}, extensionBucket []byte, dnsNameBucket []byte, provisionerName string) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		b, err := db.getBucket(tx, bucket)
 		if err != nil {

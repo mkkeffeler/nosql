@@ -98,7 +98,7 @@ type DB interface {
 	// Set sets the given value in the given table/bucket and key.
 	Set(bucket, key, value []byte) error
 	// SetX509Certificate sets the given value in the x509 certificate table/bucket and key.
-	SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string, extensions []map[interface{}]interface{}, sans []map[interface{}]interface{}, extensionBucket []byte, dnsNameBucket []byte) error
+	SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string, extensions []map[interface{}]interface{}, sans []map[interface{}]interface{}, extensionBucket []byte, dnsNameBucket []byte, provisionerName string) error
 	// CmpAndSwap swaps the value at the given bucket and key if the current
 	// value is equivalent to the oldValue input. Returns 'true' if the
 	// swap was successful and 'false' otherwise.
@@ -218,7 +218,7 @@ func (tx *Tx) Get(bucket, key []byte) {
 }
 
 // SetX509Certificate adds a new write query to the transaction.
-func (tx *Tx) SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string, extensions []map[interface{}]interface{}, sans []map[interface{}]interface{}, extensionBucket []byte, dnsNameBucket []byte) {
+func (tx *Tx) SetX509Certificate(bucket, key, value []byte, notBefore time.Time, notAfter time.Time, province []string, locality []string, country []string, organization []string, organizationalUnit []string, commonName string, issuer string, extensions []map[interface{}]interface{}, sans []map[interface{}]interface{}, extensionBucket []byte, dnsNameBucket []byte, provisionerName string) {
 	tx.Operations = append(tx.Operations, &TxEntry{
 		Bucket: bucket,
 		Key:    key,
@@ -291,5 +291,6 @@ type Entry struct {
 	SubjectOrganization       sql.NullString
 	SubjectOrganizationalUnit sql.NullString
 	SubjectCommonName         sql.NullString
+	ProvisionerName           sql.NullString
 	IssuerDistinguishedName   sql.NullString
 }
